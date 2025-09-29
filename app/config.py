@@ -8,5 +8,7 @@ class Settings(BaseSettings):
     GOOGLE_API_KEY: str
     NOTION_API_KEY: str
     NOTION_DATABASE_ID: str
+    GEMINI_MODEL: str
+    TIMEZONE: str
 
 settings = Settings()

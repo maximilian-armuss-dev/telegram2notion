@@ -1,15 +1,16 @@
 import json
 import logging
+import pytz
+from datetime import datetime
 from langchain_google_genai import ChatGoogleGenerativeAI
-from datetime import date
-from ..config import settings
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 class LLMService:
     def __init__(self, prompt_template_path: str):
         """Initializes the LLM service with the Gemini model and a prompt template."""
-        self.model = ChatGoogleGenerativeAI(model="gemini-pro", google_api_key=settings.GOOGLE_API_KEY)
+        self.model = ChatGoogleGenerativeAI(model=settings.GEMINI_MODEL, google_api_key=settings.GOOGLE_API_KEY)
         try:
             with open(prompt_template_path, 'r', encoding='utf-8') as f:
                 self.prompt_template = f.read()
@@ -19,9 +20,12 @@ class LLMService:
 
     def _build_prompt(self, thoughts_text: str, schema_json: str) -> str:
         """Builds the final prompt by injecting context into the template."""
+        timezone = pytz.timezone(settings.TIMEZONE)
+        current_date = datetime.now(timezone).strftime("%Y-%m-%d")
+
         prompt = self.prompt_template.replace('[[SCHEMA PLACEHOLDER]]', schema_json)
         prompt = prompt.replace('[[TEXT PLACEHOLDER]]', thoughts_text)
-        prompt = prompt.replace('{{ $today }}', str(date.today()))
+        prompt = prompt.replace('{{ $today }}', current_date)
         return prompt
 
     async def process_thoughts(self, thoughts: list[str], notion_schema: dict) -> list[dict]:

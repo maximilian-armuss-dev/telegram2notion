@@ -1,9 +1,9 @@
 import asyncio
 import logging
-from ..services.telegram_service import TelegramService
-from ..services.gladia_service import GladiaService
-from ..services.notion_service import NotionService
-from ..services.llm_service import LLMService
+from app.services.telegram_service import TelegramService
+from app.services.gladia_service import GladiaService
+from app.services.notion_service import NotionService
+from app.services.llm_service import LLMService
 
 logger = logging.getLogger(__name__)
 STATE_FILE = "last_update_id.txt"

@@ -37,7 +37,7 @@ The project follows a modular, service-oriented approach. Each external API (Tel
 ├── Dockerfile                  # Instructions for building the Docker image
 ├── docker-compose.yml          # Service definition for Docker Compose
 ├── entrypoint.sh               # Initialization script
-├── ai-agent-cron               # Crontab file defining time interval between executions
+└── ai-agent-cron               # Crontab file defining time interval between executions
 ```
 
 ## 🛠️ Setup
@@ -65,7 +65,7 @@ Create the `.env` file: Copy the template and fill in your API keys and the Noti
 ```bash
 cp .env.example .env
 ```
-Now, open the `.env` file and enter your values.
+Now, open the `.env` file and set your API keys, timezone, and gemini model.
 
 Set up the Notion Database:
 

@@ -9,6 +9,9 @@ WORKDIR /code
 COPY ./requirements.txt /code/requirements.txt
 RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
 
+COPY ./setup.py /code/setup.py
+RUN pip install -e .
+
 COPY ./app /code/app
 COPY ./prompts /code/prompts
 

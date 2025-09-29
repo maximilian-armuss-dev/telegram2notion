@@ -1,8 +1,8 @@
 import asyncio
 import logging
 from fastapi import FastAPI, HTTPException
-from .processing.workflow_processor import run_workflow
-from .logging_config import setup_logging
+from app.processing.workflow_processor import run_workflow
+from app.logging_config import setup_logging
 
 setup_logging()
 logger = logging.getLogger(__name__)

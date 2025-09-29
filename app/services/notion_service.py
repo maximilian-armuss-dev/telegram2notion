@@ -1,6 +1,6 @@
 import logging
 from notion_client import AsyncClient
-from ..config import settings
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
