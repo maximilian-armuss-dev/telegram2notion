@@ -81,7 +81,7 @@ async def run_workflow():
             elif action.get("action") == "update" and "page_id" in action:
                 await notion.update_page(action["page_id"], action.get("data"))
             else:
-                logger.warning(f"Skipping action '{action.get("action")}', page_id present = {"page_id" in action}")
+                logger.warning(f"Skipping action '{action.get('action')}', page_id in action = {'page_id' in action}")
 
     except Exception as e:
         logger.critical(f"A critical error occurred during LLM or Notion processing: {e}", exc_info=True)
