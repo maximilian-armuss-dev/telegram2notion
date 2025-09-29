@@ -2,3 +2,4 @@
 .DS_Store
 last_update_id.txt
 *.pyc
+**/__pycache__
