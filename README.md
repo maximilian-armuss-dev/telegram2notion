@@ -30,12 +30,14 @@ The project follows a modular, service-oriented approach. Each external API (Tel
 │       └── workflow_processor.py # The main workflow orchestrator
 ├── prompts/
 │   └── main_prompt.txt         # The master prompt for the LLM
-├── .env                        # Your secret API keys
+├── (.env)                      # Your secret API keys (to be created!)
 ├── .env.example                # Template for the .env file
 ├── .cursorrules                # AI coding assistant rules
 ├── requirements.txt            # Python dependencies
 ├── Dockerfile                  # Instructions for building the Docker image
-└── docker-compose.yml          # Service definition for Docker Compose
+├── docker-compose.yml          # Service definition for Docker Compose
+├── entrypoint.sh               # Initialization script
+├── ai-agent-cron               # Crontab file defining time interval between executions
 ```
 
 ## 🛠️ Setup
@@ -55,8 +57,8 @@ You will need API keys for the following services:
 
 Clone the repository:
 ```bash
-git clone <your-repo-url>
-cd <your-project-folder>
+git clone git@github.com:maximilian-armuss-dev/telegram2notion.git
+cd telegram2notion
 ```
 
 Create the `.env` file: Copy the template and fill in your API keys and the Notion Database ID.
@@ -69,7 +71,7 @@ Set up the Notion Database:
 
 *   Create a new database in Notion.
 *   Click the three dots (...) in the top-right corner of the database -> "Add connection" and select the integration you created earlier.
-*   The Database ID is the part of the URL between your workspace name and the question mark.  Example: `https://www.notion.so/YOUR-WORKSPACE/DATABASE_ID?v=...`
+*   The Database ID is the part of the URL between your workspace name and the question mark.  Example: `https://www.notion.so/DATABASE_ID?v=...`
 
 ## 🚀 Running the Application
 
@@ -87,4 +89,4 @@ You can access the interactive API documentation at `http://localhost:8000/docs`
 
 ### Automated Execution (Cron Job)
 
-The cron job is now managed inside the container and starts automatically. You no longer need to configure this on your host machine. The workflow will run once on startup and then every 10 minutes as defined in the `Dockerfile` and `ai-agent-cron` file.
+The workflow will run once on startup and then every 10 minutes as defined in the `ai-agent-cron` file.
