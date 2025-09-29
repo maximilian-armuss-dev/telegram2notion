@@ -45,7 +45,7 @@ class GladiaService:
 
     async def _poll_for_result(self, client: httpx.AsyncClient, result_url: str) -> str:
         while True:
-            await asyncio.sleep(5)
+            await asyncio.sleep(10)
             response = await client.get(result_url, headers=self.headers)
             response.raise_for_status()
             data = response.json()
