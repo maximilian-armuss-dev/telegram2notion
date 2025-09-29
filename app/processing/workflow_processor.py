@@ -34,7 +34,7 @@ class WorkflowProcessor:
         self.telegram = TelegramService()
         self.gladia = GladiaService()
         self.notion = NotionService()
-        self.llm = LLMService(prompt_template_path="prompts/main_prompt.txt")
+        self.llm = LLMService(prompt_template_path="prompts/gemini_prompt.md")
         self.gladia_semaphore = asyncio.Semaphore(3)
         self._reset_summary()
 
@@ -60,7 +60,6 @@ class WorkflowProcessor:
 
         if not unprocessed:
             logger.info("All fetched updates were already processed.")
-            # Save state in case there were gaps in the processed_ids list
             all_fetched_ids = {u.update_id for u in updates}
             save_processed_update_ids(processed_ids.union(all_fetched_ids))
         
@@ -102,10 +101,12 @@ class WorkflowProcessor:
             action_type = action.get("action")
             if action_type == "create":
                 notion_tasks.append(self.notion.create_page(action.get("data")))
-            elif action_type == "update" and "page_id" in action:
+            elif action_type == "update" and action.get("page_id"):
                 notion_tasks.append(self.notion.update_page(action["page_id"], action.get("data")))
+            elif action_type == "archive" and action.get("page_id"):
+                notion_tasks.append(self.notion.archive_page(action["page_id"]))
             else:
-                logger.warning(f"Skipping action '{action_type}' returned by LLM. (page_id in action?: {'page_id' in action})")
+                logger.warning(f"Skipping unknown or invalid action: {action}")
         
         if notion_tasks:
             await asyncio.gather(*notion_tasks)
@@ -114,8 +115,7 @@ class WorkflowProcessor:
         """Logs the final summary report of the workflow run."""
         retried_next_run = self.summary["to_process_count"] - self.summary["processed_successfully"]
         report = f"""
-        \n
-        -------------------------------------------------
+        \n-------------------------------------------------
         📊 WORKFLOW RUN SUMMARY
         -------------------------------------------------
         - Telegram Updates Fetched:   {self.summary['fetched_from_telegram']}
@@ -123,7 +123,7 @@ class WorkflowProcessor:
         
         - Content Extraction:
           - ✅ Success:               {self.summary['content_extraction_success']}
-          - ❌ Failed:               {self.summary['content_extraction_failed']}
+          - ❌ Failed:                {self.summary['content_extraction_failed']}
           
         - Final Processing:
           - ✅ Processed & Saved:     {self.summary['processed_successfully']}

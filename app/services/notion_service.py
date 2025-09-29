@@ -1,4 +1,5 @@
 import logging
+import json
 from notion_client import AsyncClient
 from app.config import settings
 
@@ -30,6 +31,8 @@ class NotionService:
 
     async def create_page(self, data: dict):
         """Creates a new page in the Notion database."""
+        logger.info(f"Sending following data to Notion create API: \n{json.dumps(data, indent=2)}")
+        
         logger.info("Creating a new page in Notion.")
         response = await self.client.pages.create(
             parent={"database_id": settings.NOTION_DATABASE_ID},
@@ -46,4 +49,17 @@ class NotionService:
             properties=data
         )
         logger.info(f"Successfully updated Notion page with ID: {page_id}")
+        return response
+
+    async def archive_page(self, page_id: str):
+        """
+        Archives a page in Notion, which is the equivalent of deleting it.
+        The page can be restored from the trash in Notion if needed.
+        """
+        logger.info(f"Archiving Notion page with ID: {page_id}")
+        response = await self.client.pages.update(
+            page_id=page_id,
+            archived=True
+        )
+        logger.info(f"Successfully archived Notion page with ID: {page_id}")
         return response

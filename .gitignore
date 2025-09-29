@@ -1,5 +1,5 @@
 .env
 .DS_Store
-last_update_id.txt
 *.pyc
 **/__pycache__
+processed_update_ids.json
