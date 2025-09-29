@@ -1,0 +1,12 @@
+version: '3.8'
+services:
+  ai-agent:
+    build: .
+    container_name: ai-thought-processor
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      # Volume to persist the last_update_id.txt file
+      - ./:/code

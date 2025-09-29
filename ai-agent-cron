@@ -1,0 +1,3 @@
+# Executes the AI-agent every 10min.
+# CRUCIAL: Keep final unix-style newline!
+*/10 * * * * root python /code/app/main.py >> /var/log/cron.log 2>&1

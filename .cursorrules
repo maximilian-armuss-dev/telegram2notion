@@ -1,0 +1,31 @@
+# 🌟 Project Guidelines & Code Style 🌟
+
+This document defines the rules and preferred style for code generation within this project.
+
+## 🚀 Technology Stack 🚀
+
+*   **Python:** Version 3.11+ is used.
+*   **FastAPI:** For the implementation of API endpoints.
+*   **Docker & Docker Compose:** For containerization of the application.
+
+## 📚 Core Libraries 📚
+
+*   `langchain-google-genai`: For interaction with the Gemini model.
+*   `python-telegram-bot`: The official SDK for the Telegram Bot API.
+*   `notion-client`: The official SDK for the Notion API.
+*   `pydantic-settings`: For managing environment variables.
+
+## 🏗️ Architecture & Code Style 🏗️
+
+*   The code must be **modular** and follow the principle of **Separation of Concerns**.
+*   Create a dedicated service in the `/app/services` directory for each external API.
+*   Always prefer using official SDKs (like `python-telegram-bot` or `notion-client`) over direct HTTP requests with `httpx` or `requests`.
+*   Use the `logging` module for all informational output, warnings, and errors. The `print()` function must **never** be used.
+*   All configuration values and credentials must be loaded from the `.env` file via `config.py`. Hardcoded keys in the source code are **not** allowed.
+*   The main workflow is orchestrated in `app/processing/workflow_processor.py`.
+*   The application's entry point is `app/main.py`.
+
+## 📝 Prompts 📝
+
+*   The central prompt for the LLM is located in `/prompts/main_prompt.txt`.
+*   When modifying logic that involves the LLM, always refer to this file and its placeholders (`[[SCHEMA PLACEHOLDER]]`, `[[TEXT PLACEHOLDER]]`).

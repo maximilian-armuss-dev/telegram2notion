@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+pydantic-settings
+python-dotenv
+httpx
+langchain-google-genai
+python-telegram-bot
+notion-client
