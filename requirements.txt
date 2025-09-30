@@ -4,6 +4,11 @@ pydantic-settings
 python-dotenv
 httpx
 langchain-google-genai
+langchain-community
+langchain-huggingface
+sentence-transformers
+faiss-cpu
+torch
 python-telegram-bot
 notion-client
 pytz

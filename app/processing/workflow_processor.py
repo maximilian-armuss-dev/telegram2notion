@@ -5,6 +5,7 @@ from app.services.telegram_service import TelegramService
 from app.services.gladia_service import GladiaService
 from app.services.notion_service import NotionService
 from app.services.llm_service import LLMService
+from app.services.vector_service import VectorService
 
 # --- CONFIGURATION & STATE (Module Level) ---
 
@@ -35,6 +36,7 @@ class WorkflowProcessor:
         self.gladia = GladiaService()
         self.notion = NotionService()
         self.llm = LLMService(prompt_template_path="prompts/gemini_prompt.md")
+        self.vector_service = VectorService()
         self.gladia_semaphore = asyncio.Semaphore(3)
         self._reset_summary()
 
@@ -85,10 +87,10 @@ class WorkflowProcessor:
         self.summary["content_extraction_success"] = len(thoughts)
         return thoughts, successful_ids
 
-    async def _process_batch(self, thoughts: list[str], schema: dict):
+    async def _process_batch(self, thoughts: list[str], schema: dict, retrieved_documents: str):
         """Processes a batch of thoughts with the LLM and executes actions on Notion."""
         logger.info(f"Sending a batch of {len(thoughts)} thoughts to the LLM...")
-        actions = await self.llm.process_thoughts(thoughts, schema)
+        actions = await self.llm.process_thoughts(thoughts, schema, retrieved_documents)
         self.summary["notion_actions_executed"] = len(actions) if actions else 0
 
         if not actions:
@@ -144,6 +146,11 @@ class WorkflowProcessor:
             schema = await self.notion.get_database_schema()
             processed_ids = get_processed_update_ids()
 
+            # RAG: 1. Fetch all pages from Notion and build the vector index
+            logger.info("Building vector index from Notion pages for RAG...")
+            notion_pages = await self.notion.query_all_pages()
+            self.vector_service.build_index_from_notion_pages(notion_pages)
+            
             unprocessed_updates = await self._fetch_and_filter_updates(processed_ids)
             if not unprocessed_updates:
                 return
@@ -152,7 +159,18 @@ class WorkflowProcessor:
             if not thoughts:
                 return
 
-            await self._process_batch(thoughts, schema)
+            # RAG: 2. Search for relevant documents
+            concatenated_thoughts = "\n---\n".join(thoughts)
+            search_results = self.vector_service.search(concatenated_thoughts)
+            
+            # RAG: 3. Format documents for the prompt
+            retrieved_docs_formatted = "\n\n".join(
+                [f"ID: {doc.metadata['page_id']}\nContent: {doc.page_content}" for doc in search_results]
+            )
+            if not retrieved_docs_formatted:
+                retrieved_docs_formatted = "No relevant documents found."
+
+            await self._process_batch(thoughts, schema, retrieved_docs_formatted)
             
             # Persist successful state
             processed_ids.update(successful_ids)

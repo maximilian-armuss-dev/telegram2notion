@@ -63,3 +63,87 @@ class NotionService:
         )
         logger.info(f"Successfully archived Notion page with ID: {page_id}")
         return response
+
+    async def query_all_pages(self) -> list[dict]:
+        """
+        Queries all pages from the Notion database and extracts their content.
+        Handles pagination to retrieve more than 100 pages.
+        """
+        logger.info("Querying all pages from Notion database...")
+        all_pages_content = []
+        has_more = True
+        start_cursor = None
+
+        while has_more:
+            try:
+                response = await self.client.databases.query(
+                    database_id=settings.NOTION_DATABASE_ID,
+                    start_cursor=start_cursor,
+                    filter={
+                        "property": "progress",
+                        "status": {
+                            "does_not_equal": "Done"
+                        }
+                    }
+                )
+                results = response.get("results", [])
+                
+                for page in results:
+                    page_id = page.get("id")
+                    properties = page.get("properties", {})
+                    content = self._extract_text_from_properties(properties)
+                    
+                    if page_id and content:
+                        all_pages_content.append({"page_id": page_id, "content": content})
+
+                has_more = response.get("has_more", False)
+                start_cursor = response.get("next_cursor")
+                logger.info(f"Retrieved {len(results)} pages. Has more: {has_more}")
+
+            except Exception as e:
+                logger.error(f"An error occurred while querying Notion database: {e}", exc_info=True)
+                break 
+        
+        logger.info(f"Total pages retrieved and processed: {len(all_pages_content)}")
+        return all_pages_content
+
+    def _extract_text_from_properties(self, properties: dict) -> str:
+        """
+        Extracts key properties from a Notion page and formats them into a single
+        string for embedding. Includes description, progress, priority, deadline, and tags.
+        The title is intentionally excluded to avoid redundancy.
+        """
+        data = {}
+        
+        for prop_name, prop_value in properties.items():
+            prop_type = prop_value.get("type")
+            
+            # Use lowercased property name for consistent matching
+            name_lower = prop_name.lower()
+
+            if name_lower == "description" and prop_type == "rich_text":
+                texts = [item.get("plain_text", "") for item in prop_value.get("rich_text", [])]
+                data['Description'] = "".join(texts).strip()
+
+            elif name_lower == "progress" and prop_type == "status":
+                if prop_value.get("status"):
+                    data['Progress'] = prop_value["status"].get("name", "")
+
+            elif name_lower == "priority" and prop_type == "select":
+                if prop_value.get("select"):
+                    data['Priority'] = prop_value["select"].get("name", "")
+
+            elif name_lower == "deadline" and prop_type == "date":
+                if prop_value.get("date"):
+                    data['Deadline'] = prop_value["date"].get("start", "")
+
+            elif name_lower == "tags" and prop_type == "multi_select":
+                tags_list = prop_value.get("multi_select", [])
+                tags = [tag.get("name", "") for tag in tags_list if tag.get("name")]
+                if tags:
+                    data['Tags'] = ", ".join(tags)
+
+        # Format the extracted data into a clean, searchable string
+        content_parts = [f"{key}: {value}" for key, value in data.items() if value]
+        
+        return "\n".join(content_parts)

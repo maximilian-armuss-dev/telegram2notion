@@ -74,13 +74,13 @@ class LLMService:
             
             self.prompt_template = PromptTemplate(
                 template=template_string,
-                input_variables=["schema", "today", "thoughts"]
+                input_variables=["schema", "today", "thoughts", "retrieved_documents"]
             )
         except FileNotFoundError:
             logger.critical(f"Prompt template file not found at: {prompt_template_path}")
             raise
 
-    async def process_thoughts(self, thoughts: list[str], notion_schema: dict) -> list[dict]:
+    async def process_thoughts(self, thoughts: list[str], notion_schema: dict, retrieved_documents: str = "") -> list[dict]:
         if not thoughts:
             return []
             
@@ -91,21 +91,20 @@ class LLMService:
 
         chain = self.prompt_template | self.model
         
-        final_prompt_str = self.prompt_template.format(
-            schema=schema_as_string,
-            today=current_date,
-            thoughts=concatenated_thoughts
-        )
+        prompt_input = {
+            "schema": schema_as_string,
+            "today": current_date,
+            "thoughts": concatenated_thoughts,
+            "retrieved_documents": retrieved_documents
+        }
+
+        final_prompt_str = self.prompt_template.format(**prompt_input)
         logger.info("--- FINAL PROMPT SENT TO LLM ---\n%s\n---------------------------------", final_prompt_str)
         
         logger.info(f"Sending a batch of {len(thoughts)} thoughts to the LLM...")
         
         try:
-            response = await chain.ainvoke({
-                "schema": schema_as_string,
-                "today": current_date,
-                "thoughts": concatenated_thoughts
-            })
+            response = await chain.ainvoke(prompt_input)
             
             logger.info("--- RAW LLM RESPONSE ---\n%s\n------------------------", response.content)
 

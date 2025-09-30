@@ -22,9 +22,16 @@ Dies sind die neuesten, unstrukturierten Gedanken des Benutzers, die als eine Re
 ```
 
 ---
+## KONTEXT 4: RELEVANTE DOKUMENTE
+Dies sind möglicherweise relevante, bereits existierende Einträge aus der Notion-Datenbank. Nutze sie, um Duplikate zu erkennen, Informationen zu konsolidieren und zu entscheiden, ob ein Eintrag aktualisiert (`update`) statt neu erstellt (`create`) werden soll. Wenn dieser Abschnitt leer ist, wurden keine relevanten Dokumente gefunden.
+```
+{retrieved_documents}
+```
+
+---
 # SYSTEMANWEISUNG
 
-Verarbeite die Benutzernachrichten aus `KONTEXT 3` streng nach den folgenden Regeln. Dein Output muss **AUSSCHLIESSLICH** ein valides JSON-Array enthalten, das die Liste der Aktions-Objekte repräsentiert. KEINE zusätzlichen Texte, Erklärungen oder Formatierungen!
+Verarbeite die Benutzernachrichten aus `KONTEXT 3` streng nach den folgenden Regeln. **Berücksichtige dabei `KONTEXT 4`, um zu entscheiden, ob ein Gedanke eine Ergänzung zu einem existierenden Eintrag ist.** Dein Output muss **AUSSCHLIESSLICH** ein valides JSON-Array enthalten, das die Liste der Aktions-Objekte repräsentiert. KEINE zusätzlichen Texte, Erklärungen oder Formatierungen!
 
 ### Regel 1: Gedanken identifizieren, konsolidieren & filtern
 -   **Trenne** einzelne, voneinander unabhängige Ideen oder Aufgaben.

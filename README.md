@@ -7,6 +7,7 @@ An AI agent that captures thoughts from Telegram messages (text & voice), transc
 *   **Telegram Integration:** Fetches new messages from a Telegram bot at regular intervals (polling).
 *   **Voice Transcription:** Voice messages are automatically converted to text using Gladia AI.
 *   **Intelligent Processing:** Google Gemini analyzes the collected texts, understands the context, consolidates ideas, and derives actions (e.g., create a new task, update an existing one).
+*   **Retrieval Augmented Generation (RAG):** Leverages a local vector database (FAISS with HuggingFace embeddings) to provide the LLM with relevant context from existing Notion pages, improving decision-making for creating, updating, or archiving entries.
 *   **Notion Synchronization:** Creates or updates entries in a Notion database based on the LLM's analysis.
 *   **Containerized:** The entire project is packaged in Docker for simple, isolated, and reproducible execution.
 
@@ -21,11 +22,13 @@ The project follows a modular, service-oriented approach. Each external API (Tel
 │   ├── main.py                 # FastAPI endpoint and main script
 │   ├── config.py               # Loads all settings from .env
 │   ├── logging_config.py       # Configures application-wide logging
+│   ├── cache_model.py          # Caches the embedding model during Docker build
 │   ├── services/               # Modules for external APIs
 │   │   ├── telegram_service.py
 │   │   ├── gladia_service.py
 │   │   ├── notion_service.py
-│   │   └── llm_service.py
+│   │   ├── llm_service.py
+│   │   └── vector_service.py   # Handles vector index creation and querying for RAG
 │   └── processing/
 │       └── workflow_processor.py # The main workflow orchestrator
 ├── prompts/
@@ -44,7 +47,7 @@ The project follows a modular, service-oriented approach. Each external API (Tel
 
 ### 1. Prerequisites
 
-Docker and Docker Compose must be installed on your system.
+Docker and Docker Compose must be installed on your system. The application also requires several Python libraries for vector embeddings and search (langchain-huggingface, sentence-transformers, faiss-cpu, torch).
 
 You will need API keys for the following services:
 
