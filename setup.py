@@ -1,4 +1,5 @@
-from setuptools import setup, find_packages
+"""Module to package the AI Thought Processor application."""
+from setuptools import find_packages, setup
 
 setup(
     name="ai_thought_processor",

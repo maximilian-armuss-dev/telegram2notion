@@ -1,31 +1,27 @@
+"""
+Main entrypoint for the Telegram-to-Notion workflow application.
+
+This script initializes the logging configuration and starts the main asynchronous
+workflow processor. It is intended to be run as a standalone script or as the
+target for a scheduler (e.g., a cron job).
+"""
 import asyncio
 import logging
-from fastapi import FastAPI, HTTPException
-from app.processing.workflow_processor import run_workflow
 from app.logging_config import setup_logging
+from app.processing.workflow_processor import run_workflow
 
 setup_logging()
 logger = logging.getLogger(__name__)
 
-app = FastAPI(
-    title="AI Thought Processor",
-    description="An agent to process thoughts from Telegram and organize them in Notion.",
-    version="1.0.0"
-)
-
-@app.post("/run-workflow", summary="Trigger the Telegram to Notion workflow")
-async def trigger_workflow():
-    """
-    Manually triggers the workflow to fetch messages from Telegram,
-    process them, and update Notion.
-    """
+def main() -> None:
+    """Synchronous wrapper to run the main async workflow."""
+    logger.info("Application starting...")
     try:
-        await run_workflow()
-        return {"status": "success", "message": "Workflow executed successfully."}
+        asyncio.run(run_workflow())
     except Exception as e:
-        logger.error(f"Workflow execution failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.critical(f"Application terminated with a critical error: {e}", exc_info=True)
+    finally:
+        logger.info("Application finished.")
 
 if __name__ == "__main__":
-    logger.info("Running workflow directly from script...")
-    asyncio.run(run_workflow())
+    main()
