@@ -1,0 +1,3 @@
+[submodule "rules/external"]
+	path = rules/external
+	url = git@github.com:maximilian-armuss-dev/prompts.git
