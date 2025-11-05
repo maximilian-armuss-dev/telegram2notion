@@ -11,7 +11,9 @@ This module contains the main business logic, coordinating various services to:
 """
 import asyncio
 import logging
-from typing import List, Set, Tuple, Dict, Any, Optional
+from collections import deque
+from datetime import datetime, timedelta, timezone
+from typing import Any, Deque, Dict, List, Optional, Set, Tuple
 from telegram import Update
 from app.services.telegram_service import TelegramService
 from app.services.gladia_service import GladiaService
@@ -26,15 +28,17 @@ logger = logging.getLogger(__name__)
 class WorkflowProcessor:
     """Encapsulates the logic for processing Telegram updates and saving them to Notion."""
 
-    def __init__(self) -> None:
+    def __init__(self, telegram_service: Optional[TelegramService] = None) -> None:
         """Initializes all necessary services."""
-        self.telegram = TelegramService()
+        self.telegram = telegram_service or TelegramService()
         self.gladia = GladiaService()
         self.notion = NotionService()
         self.llm = LLMService()
         self.vector_service = VectorService()
-        # Semaphore to limit concurrent transcriptions and avoid rate-limiting.
-        self.gladia_semaphore = asyncio.Semaphore(3)
+        # Semaphore and counters to respect Gladia rate limits.
+        self.gladia_semaphore = asyncio.Semaphore(settings.GLADIA_MAX_CONCURRENT_TRANSCRIPTIONS)
+        self._gladia_rate_lock = asyncio.Lock()
+        self._gladia_request_timestamps: Deque[datetime] = deque()
         self._reset_summary()
 
     def _reset_summary(self) -> None:
@@ -48,32 +52,72 @@ class WorkflowProcessor:
             "notion_actions_executed": 0,
         }
 
-    async def run(self) -> None:
-        """Public method to execute the entire workflow end-to-end."""
+    async def run(self) -> bool:
+        """
+        Public method to execute the entire workflow end-to-end.
+        Returns:
+            bool: True if new updates were fetched during this run, False otherwise.
+        """
         logger.info("🚀 Starting workflow run...")
         self._reset_summary()
+        processed_ids: Set[int] = set()
+        processed_updates = False
         try:
-            schema = await self.notion.get_database_schema()
             processed_ids = get_processed_update_ids()
-            await self._build_rag_index()
             unprocessed_updates = await self._fetch_and_filter_updates(processed_ids)
             if not unprocessed_updates:
-                return
+                return False
+            processed_updates = True
             thoughts, successful_ids = await self._extract_content_from_updates(unprocessed_updates)
             if not thoughts:
-                return
+                self._persist_successful_updates(processed_ids, successful_ids)
+                return True
+            schema = await self.notion.get_database_schema()
+            await self._build_rag_index()
             rag_context = await self._get_rag_context(thoughts)
             actions = await self.llm.process_thoughts(thoughts, schema, rag_context)
             if actions:
                 await self._execute_notion_actions(actions)
             else:
                 logger.warning("LLM returned no actions. The batch will be retried in the next run.")
-            # Persist state only for successfully processed updates.
-            processed_ids.update(successful_ids)
-            save_processed_update_ids(processed_ids)
-            self.summary["processed_successfully"] = len(successful_ids)
+            self._persist_successful_updates(processed_ids, successful_ids)
         except Exception as e:
             logger.critical(f"A critical, unhandled error occurred during the workflow run: {e}", exc_info=True)
+        finally:
+            self._log_summary()
+        return processed_updates
+
+    async def process_update(self, update: Update) -> None:
+        """
+        Processes a single Telegram update, primarily used for webhook deliveries.
+
+        Args:
+            update: The Telegram update to process.
+        """
+        logger.info(f"Processing single update {update.update_id} via webhook pathway.")
+        processed_ids = get_processed_update_ids()
+        if update.update_id in processed_ids:
+            logger.info(f"Skipping update {update.update_id}: already processed.")
+            return
+        self._reset_summary()
+        self.summary["fetched_from_telegram"] = 1
+        self.summary["to_process_count"] = 1
+        try:
+            schema = await self.notion.get_database_schema()
+            await self._build_rag_index()
+            thoughts, successful_ids = await self._extract_content_from_updates([update])
+            if not thoughts:
+                logger.info(f"No processable content found in update {update.update_id}.")
+                return
+            rag_context = await self._get_rag_context(thoughts)
+            actions = await self.llm.process_thoughts(thoughts, schema, rag_context)
+            if actions:
+                await self._execute_notion_actions(actions)
+            else:
+                logger.warning(f"LLM returned no actions for update {update.update_id}.")
+            self._persist_successful_updates(processed_ids, successful_ids)
+        except Exception as e:
+            logger.error(f"Error while processing update {update.update_id}: {e}", exc_info=True)
         finally:
             self._log_summary()
 
@@ -115,6 +159,52 @@ class WorkflowProcessor:
         self.summary["content_extraction_success"] = len(thoughts)
         return thoughts, successful_ids
 
+    def _persist_successful_updates(self, processed_ids: Set[int], successful_ids: List[int]) -> None:
+        """
+        Persists the IDs of successfully processed updates to the state file.
+        Args:
+            processed_ids: The current set of processed update IDs.
+            successful_ids: IDs that were processed during this run.
+        """
+        if not successful_ids:
+            return
+        processed_ids.update(successful_ids)
+        save_processed_update_ids(processed_ids)
+        self.summary["processed_successfully"] = len(successful_ids)
+
+    async def _acquire_gladia_transcription_slot(self) -> None:
+        """
+        Waits until invoking Gladia complies with hourly and concurrency quotas.
+        """
+        max_requests = settings.GLADIA_MAX_TRANSCRIPTIONS_PER_HOUR
+        if max_requests <= 0:
+            return
+        window_seconds = settings.GLADIA_RATE_LIMIT_WINDOW_SECONDS
+        cooldown_seconds = settings.GLADIA_RATE_LIMIT_COOLDOWN_SECONDS
+        while True:
+            wait_duration = 0.0
+            async with self._gladia_rate_lock:
+                now = datetime.now(timezone.utc)
+                window_start = now - timedelta(seconds=window_seconds)
+                while self._gladia_request_timestamps and self._gladia_request_timestamps[0] < window_start:
+                    self._gladia_request_timestamps.popleft()
+                if len(self._gladia_request_timestamps) < max_requests:
+                    self._gladia_request_timestamps.append(now)
+                    return
+                oldest_request = self._gladia_request_timestamps[0]
+                next_slot_time = oldest_request + timedelta(seconds=window_seconds)
+                wait_duration = max(
+                    (next_slot_time - now).total_seconds(),
+                    float(cooldown_seconds),
+                )
+            wait_duration = max(wait_duration, 0.0)
+            logger.warning(
+                "Gladia hourly quota reached (%s requests). Sleeping for %.0f seconds before retrying.",
+                max_requests,
+                wait_duration,
+            )
+            await asyncio.sleep(wait_duration)
+
     async def _process_single_update(self, update: Update) -> Tuple[int, Optional[str]]:
         """Helper to extract content from a single Telegram update."""
         message = update.message
@@ -126,6 +216,7 @@ class WorkflowProcessor:
             logger.info(f"Extracting text from update {update_id}.")
             return update_id, message.text
         if message.voice:
+            await self._acquire_gladia_transcription_slot()
             logger.info(f"Waiting for semaphore slot to transcribe update {update_id}...")
             async with self.gladia_semaphore:
                 logger.info(f"Semaphore slot acquired for update {update_id}. Starting transcription.")
@@ -136,7 +227,7 @@ class WorkflowProcessor:
                         logger.info(f"Successfully transcribed voice message from update {update_id}.")
                     return update_id, transcribed_text
                 except Exception as e:
-                    logger.error(f"Failed to transcribe audio for update {update_id}: {e}")
+                    logger.error(f"Failed to transcribe audio for update {update_id}: {e}", exc_info=True)
                     return update_id, None
         logger.info(f"Skipping update {update_id}: Contains no processable text or voice message.")
         return update_id, None
@@ -152,7 +243,7 @@ class WorkflowProcessor:
         unique_retrieved_page_ids = set()
         all_retrieved_documents = []
         for thought_obj in structured_thoughts:
-            thought_text = thought_obj.get("description", "") # Direkt das "description" Feld verwenden
+            thought_text = thought_obj.get("description", "")  # Use the "description" field directly
             if not thought_text:
                 logger.warning(f"Structured thought object has no 'description' field. Skipping RAG search for this thought: {thought_obj}")
                 continue
@@ -177,7 +268,6 @@ class WorkflowProcessor:
 
     async def _execute_notion_actions(self, actions: List[Dict[str, Any]]) -> None:
         """Executes a list of actions (create, update, archive) on Notion in parallel, prioritizing create, then update, then archive for task queuing."""
-        self.summary["notion_actions_executed"] = len(actions)
         logger.info(f"Executing {len(actions)} actions on Notion...")
         # Separate actions by type for prioritized execution
         create_actions = [a for a in actions if a.get("action") == "create"]
@@ -199,11 +289,22 @@ class WorkflowProcessor:
                 tasks.append(self.notion.archive_page(page_id))
             else:
                 logger.warning(f"Skipping unknown or invalid action: {action}")
-        if tasks:
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            for i, result in enumerate(results):
-                if isinstance(result, Exception):
-                    logger.error(f"Failed to execute Notion action for task {i}: {result}")
+        executed_count = len(tasks)
+        self.summary["notion_actions_executed"] = executed_count
+        if not tasks:
+            logger.info("No executable Notion actions after validation.")
+            return
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        failures = 0
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                failures += 1
+                logger.error(
+                    f"Failed to execute Notion action for task {i}: {result}",
+                    exc_info=True,
+                )
+        if failures:
+            self.summary["notion_actions_executed"] = max(executed_count - failures, 0)
 
     def _log_summary(self) -> None:
         """Logs the final summary report of the workflow run."""
@@ -233,5 +334,3 @@ async def run_workflow() -> None:
     """Initializes and runs the WorkflowProcessor."""
     processor = WorkflowProcessor()
     await processor.run()
-
-
