@@ -21,6 +21,33 @@ class NotionService:
         self.client = AsyncClient(auth=settings.NOTION_API_KEY)
         self.database_id = settings.NOTION_DATABASE_ID
 
+    async def _query_database(self, **params: Any) -> Dict[str, Any]:
+        """
+        Queries the configured database using the notion-client API compatible with multiple versions.
+        Args:
+            params: Additional parameters forwarded to the query endpoint.
+        Returns:
+            The raw Notion API response.
+        Raises:
+            RuntimeError: If neither query method is available on the client.
+        """
+        request_params = {"database_id": self.database_id, **params}
+        query_callable = getattr(self.client.databases, "query", None)
+        if callable(query_callable):
+            logger.debug("Querying Notion database via databases.query endpoint.")
+            try:
+                return await query_callable(**request_params)
+            except TypeError:
+                return await query_callable(self.database_id, **params)
+        query_database_callable = getattr(self.client.databases, "query_database", None)
+        if callable(query_database_callable):
+            logger.debug("Querying Notion database via databases.query_database endpoint.")
+            try:
+                return await query_database_callable(**request_params)
+            except TypeError:
+                return await query_database_callable(self.database_id, **params)
+        raise RuntimeError("Unsupported notion-client version: no query method available.")
+
     async def get_database_schema(self) -> Dict[str, Any]:
         """
         Retrieves and simplifies the schema of the configured Notion database.
@@ -133,14 +160,17 @@ class NotionService:
         all_pages_content = []
         has_more = True
         start_cursor = None
-
         while has_more:
             try:
-                response = await self.client.databases.query(
-                    database_id=self.database_id,
-                    start_cursor=start_cursor,
-                    filter={"property": "progress", "status": {"does_not_equal": "Done"}}
-                )
+                query_params: Dict[str, Any] = {
+                    "filter": {
+                        "property": "progress",
+                        "status": {"does_not_equal": "Done"},
+                    },
+                }
+                if start_cursor:
+                    query_params["start_cursor"] = start_cursor
+                response = await self._query_database(**query_params)
                 results = response.get("results", [])
                 for page in results:
                     page_id = page.get("id")
@@ -153,6 +183,9 @@ class NotionService:
                 logger.info(f"Retrieved {len(results)} pages. Has more: {has_more}")
             except APIResponseError as e:
                 logger.error(f"An error occurred while querying Notion database: {e}", exc_info=True)
+                break
+            except RuntimeError as e:
+                logger.error(f"Failed to locate the Notion database query endpoint: {e}", exc_info=True)
                 break
         logger.info(f"Total pages retrieved for RAG context: {len(all_pages_content)}")
         return all_pages_content
@@ -185,7 +218,11 @@ class NotionService:
             elif name_lower == "deadline" and prop_type == "date" and prop_value.get("date"):
                 data['Deadline'] = prop_value["date"].get("start", "")
             elif name_lower == "tags" and prop_type == "multi_select":
-                tags = [tag.get("name", "") for tag in prop_value.get("multi_select", []) if tag.get("name")]
-                if tags: data['Tags'] = ", ".join(tags)
-
+                tags = [
+                    tag.get("name", "")
+                    for tag in prop_value.get("multi_select", [])
+                    if tag.get("name")
+                ]
+                if tags:
+                    data['Tags'] = ", ".join(tags)
         return "\n".join([f"{key}: {value}" for key, value in data.items() if value])
