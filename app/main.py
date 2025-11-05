@@ -1,25 +1,23 @@
 """
 Main entrypoint for the Telegram-to-Notion workflow application.
 
-This script initializes the logging configuration and starts the main asynchronous
-workflow processor. It is intended to be run as a standalone script or as the
-target for a scheduler (e.g., a cron job).
+This script initializes the logging configuration and starts the hybrid runtime
+that first catches up via polling and then serves the webhook through FastAPI.
 """
-import asyncio
 import logging
 from app.logging_config import setup_logging
-from app.processing.workflow_processor import run_workflow
+from app.bootstrap import run as run_bootstrap
 
 setup_logging()
 logger = logging.getLogger(__name__)
 
 def main() -> None:
-    """Synchronous wrapper to run the main async workflow."""
+    """Starts the hybrid polling + webhook runtime."""
     logger.info("Application starting...")
     try:
-        asyncio.run(run_workflow())
-    except Exception as e:
-        logger.critical(f"Application terminated with a critical error: {e}", exc_info=True)
+        run_bootstrap()
+    except Exception as error:
+        logger.critical(f"Application terminated with a critical error: {error}", exc_info=True)
     finally:
         logger.info("Application finished.")
 
