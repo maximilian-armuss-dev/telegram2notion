@@ -1,3 +1,0 @@
-# Executes the AI-agent every hour.
-# CRUCIAL: Keep final unix-style newline!
-*/60 * * * * root python /code/app/main.py >> /var/log/cron.log 2>&1
