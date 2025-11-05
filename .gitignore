@@ -3,3 +3,4 @@
 *.pyc
 **/__pycache__
 processed_update_ids.json
+.cache
