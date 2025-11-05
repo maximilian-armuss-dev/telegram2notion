@@ -10,6 +10,7 @@ It leverages LangChain for building and executing the LLM chains.
 import json
 import logging
 import pytz
+import re
 from datetime import datetime
 from typing import List, Dict, Any
 from langchain_core.output_parsers import PydanticOutputParser
@@ -62,8 +63,8 @@ class LLMService:
         Removes markdown code fences (```json ... ```) and leading/trailing whitespace.
         """
         cleaned = response_content.strip()
-        if cleaned.startswith("```json"):
-            cleaned = cleaned[7:]
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```[a-zA-Z]*\s*", "", cleaned, count=1)
         if cleaned.endswith("```"):
             cleaned = cleaned[:-3]
         return cleaned.strip()
@@ -82,9 +83,15 @@ class LLMService:
         chain = self.structuring_prompt_template | self.model
         logger.info(f"Structuring a batch of {len(thoughts)} thoughts...")
         try:
-            logger.info(f"--- PROMPT SENT TO STRUCTURING LLM ---\n{self.structuring_prompt_template.format(thoughts=concatenated_thoughts)}\n---------------------------------")
+            logger.debug(
+                "--- PROMPT SENT TO STRUCTURING LLM ---\n%s\n---------------------------------",
+                self.structuring_prompt_template.format(thoughts=concatenated_thoughts),
+            )
             response = await chain.ainvoke({"thoughts": concatenated_thoughts})
-            logger.info(f"--- RAW STRUCTURING LLM RESPONSE ---\n{response.content}\n------------------------")
+            logger.debug(
+                "--- RAW STRUCTURING LLM RESPONSE ---\n%s\n------------------------",
+                response.content,
+            )
             cleaned_response = self._clean_llm_json_response(response.content)
             structured_thoughts = json.loads(cleaned_response)
             if isinstance(structured_thoughts, list):
@@ -125,10 +132,16 @@ class LLMService:
             "retrieved_documents": retrieved_documents,
         }
         logger.info(f"Sending a batch of {len(thoughts)} thoughts to the main LLM...")
-        logger.info(f"--- FINAL PROMPT SENT TO LLM ---\n{self.main_prompt_template.format(**prompt_input)}\n---------------------------------")
+        logger.debug(
+            "--- FINAL PROMPT SENT TO LLM ---\n%s\n---------------------------------",
+            self.main_prompt_template.format(**prompt_input),
+        )
         try:
             response = await chain.ainvoke(prompt_input)
-            logger.info(f"--- RAW LLM RESPONSE ---\n{response.content}\n------------------------")
+            logger.debug(
+                "--- RAW LLM RESPONSE ---\n%s\n------------------------",
+                response.content,
+            )
             cleaned_response = self._clean_llm_json_response(response.content)
             parsed_response = self.parser.parse(cleaned_response)
             actions_list = parsed_response.root
@@ -138,4 +151,3 @@ class LLMService:
         except Exception as e:
             logger.error(f"Failed to invoke LLM or parse/validate response: {e}", exc_info=True)
             return []
-
