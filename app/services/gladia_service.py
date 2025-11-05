@@ -49,6 +49,8 @@ class GladiaService:
                     f"Gladia HTTP error: {e.response.status_code} - {e.response.text}",
                     exc_info=True
                 )
+            except ValueError as error:
+                logger.error(f"Gladia response validation failed: {error}", exc_info=True)
             except Exception as e:
                 logger.error(
                     f"An unexpected error occurred during transcription: {e}", exc_info=True
@@ -64,7 +66,11 @@ class GladiaService:
             files=files
         )
         response.raise_for_status()
-        return response.json()["audio_url"]
+        data = response.json()
+        audio_url = data.get("audio_url")
+        if not audio_url:
+            raise ValueError("Gladia upload response did not contain 'audio_url'.")
+        return audio_url
 
     async def _start_transcription(self, client: httpx.AsyncClient, audio_url: str) -> str:
         """Starts the transcription job and returns the URL to poll for results."""
@@ -75,7 +81,11 @@ class GladiaService:
             json=payload
         )
         response.raise_for_status()
-        return response.json()["result_url"]
+        data = response.json()
+        result_url = data.get("result_url")
+        if not result_url:
+            raise ValueError("Gladia transcription response did not contain 'result_url'.")
+        return result_url
 
     async def _poll_for_result(self, client: httpx.AsyncClient, result_url: str) -> str:
         """Polls the result URL until the transcription is complete or fails."""
@@ -86,9 +96,16 @@ class GladiaService:
             data = response.json()
             status = data.get("status")
             if status == "done":
-                return data["result"]["transcription"]["full_transcript"]
+                result = (
+                    data.get("result", {})
+                    .get("transcription", {})
+                    .get("full_transcript")
+                )
+                if not result:
+                    raise ValueError("Gladia result payload missing full transcript text.")
+                return result
             if status == "error":
                 error_message = data.get('error_message', 'Unknown transcription error.')
                 logger.error(f"Gladia transcription failed: {error_message}")
-                raise Exception(f"Gladia transcription failed: {error_message}")
+                raise RuntimeError(f"Gladia transcription failed: {error_message}")
             logger.info(f"Gladia transcription status: {status or 'unknown'}. Retrying...")
