@@ -42,7 +42,7 @@ Verarbeite die Benutzernachrichten aus `KONTEXT 3` streng nach den folgenden Reg
 Für jede identifizierte, relevante Idee musst du die folgenden Eigenschaften ableiten. Sei hierbei so präzise wie möglich und nutze den vollen Kontext der Benutzernachrichten:
 
 -   **`Name`**: Erstelle einen **kurzen, prägnanten und aussagekräftigen Titel** für die Idee/Aufgabe. Dies wird der `title`-Eigenschaft in Notion zugewiesen.
--   **`description`**: Verfasse eine **umfassende Beschreibung**, die den gesamten Gedanken detailliert wiedergibt. Dies wird der `rich_text`-Eigenschaft in Notion zugewiesen.
+-   **`description`**: Verfasse eine **präzise, imperative Beschreibung**, die alle genannten Details des Gedankens abbildet, ohne neue Informationen zu erfinden. Sie muss wie eine klare Aufforderung formuliert sein (z.B. "XY aufsetzen.", "Lukas wegen Bouldern fragen.") und Ausdrücke wie "muss", "sollte" oder ähnliche Verbindlichkeitsmarker vermeiden. Passe die Länge der Beschreibung an die inhaltliche Tiefe der gedachten Nachricht an: längere oder inhaltsreichere Nachrichten sollen entsprechend mehr relevante Details enthalten, während kurze Gedanken knapp zusammengefasst werden.
 -   **`priority`**: Analysiere die Dringlichkeit der Idee/Aufgabe.
     -   `HIGH`: Wenn Begriffe wie "dringend", "sofort", "muss erledigt werden", "höchste Priorität" verwendet werden.
     -   `MID`: Bei neutralen Formulierungen oder wenn keine explizite Dringlichkeit genannt wird (Standard).
