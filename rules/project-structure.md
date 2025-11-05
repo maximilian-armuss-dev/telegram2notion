@@ -17,20 +17,24 @@ Die gesamte Anwendungslogik befindet sich im Verzeichnis `/app`.
 ```
 /
 ├── app/
-│   ├── processing/
-│   │   └── workflow_processor.py   # 💡 HERZSTÜCK: Orchestriert den gesamten Workflow
+│   ├── main.py                     # 🚀 Einstiegspunkt (Logging + Runtime-Start)
+│   ├── bootstrap.py                # Polling-Catch-up & Webhook-Server konfigurieren
+│   ├── config.py                   # ✅ Zentraler Zugriff auf .env-Konfiguration
+│   ├── logging_config.py           # Globale Logging-Konfiguration
+│   ├── cache_model.py              # HuggingFace-Embedding beim Build cachen
+│   ├── models.py                   # Pydantic-Modelle für Notion-Strukturen
+│   ├── state_manager.py            # Persistiert verarbeitete Telegram-Updates
 │   ├── services/
-│   │   ├── telegram_service.py     # Kapselt die Telegram Bot API
-│   │   ├── gladia_service.py       # Kapselt die Gladia Speech-to-Text API
-│   │   ├── llm_service.py          # Kapselt die Interaktion mit dem LLM (LangChain)
-│   │   ├── notion_service.py       # Kapselt die Notion API
-│   │   └── vector_service.py       # Verwaltet die Vektor-Datenbank für RAG
-│   ├── config.py                   # ✅ Zentrales Laden der .env-Konfiguration
-│   ├── logging_config.py           # Konfiguration für das Logging-Modul
-│   ├── main.py                     # 🚀 Haupteinstiegspunkt der Anwendung
-│   ├── models.py                   # Pydantic-Datenmodelle für Notion-Strukturen
-│   └── state_manager.py            # Verwaltet den Zustand (verarbeitete Nachrichten)
-├── prompts/                        # Speichert LLM-Prompts als .md-Dateien
+│   │   ├── telegram_service.py     # Telegram Bot API
+│   │   ├── gladia_service.py       # Gladia Speech-to-Text
+│   │   ├── llm_service.py          # LLM-Interaktion (LangChain)
+│   │   ├── notion_service.py       # Notion API
+│   │   └── vector_service.py       # RAG-Index (FAISS + Embeddings)
+│   ├── processing/
+│   │   └── workflow_processor.py   # 💡 HERZSTÜCK: orchestriert den Workflow
+│   └── webhook_api.py              # FastAPI für Webhook & Health
+├── prompts/                        # LLM-Prompts (`gemini_prompt.md`, `thought_structuring_prompt.md`)
+├── scripts/                        # Hilfsskripte (`entrypoint.sh`, `inspect_security_logs.py`)
 ├── .env                            # Speichert alle Secrets und Konfigurationen und darf nie gelesen werden
 ├── .env.example                    # Beispiel für eine .env Datei, darf gelesen werden
 └── ...
