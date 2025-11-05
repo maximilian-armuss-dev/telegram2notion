@@ -5,7 +5,7 @@ log() {
     printf '%s | %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*"
 }
 
-STATE_FILE_PATH="${STATE_FILE_PATH:-/code/processed_update_ids.json}"
+STATE_FILE_PATH="${STATE_FILE_PATH:-/code/state/processed_update_ids.json}"
 HF_CACHE_ROOT="${HUGGINGFACE_HUB_CACHE:-${HOME:-/code}/.cache/huggingface}"
 
 ensure_state_file() {
@@ -15,7 +15,7 @@ ensure_state_file() {
         log "Creating state file at ${STATE_FILE_PATH}."
         touch "${STATE_FILE_PATH}"
     fi
-    chown root:root "${STATE_FILE_PATH}" || true
+    chmod 664 "${STATE_FILE_PATH}" || true
 }
 
 ensure_huggingface_cache() {
