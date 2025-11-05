@@ -37,7 +37,7 @@ The project follows a modular, service-oriented approach. Each external API (Tel
 │   └── thought_structuring_prompt.md
 ├── scripts/
 │   ├── entrypoint.sh           # Container entrypoint that prepares state & launches the app
-│   └── inspect_security_logs.py # Helper to audit webhook-related logs
+│   └── inspect_security_logs.py # Helper to audit webhook-related logs (NOT TESTED YET!)
 ├── (.env)                      # Your secret API keys (to be created!)
 ├── .env.example                # Template for the .env file
 ├── requirements.txt            # Python dependencies
@@ -114,7 +114,7 @@ You can access the interactive API documentation at `http://localhost:8000/docs`
 ## 🔍 Operations & Observability
 
 - **Webhook health check:** `GET /health` returns `{"status": "ok"}` when the FastAPI server is ready.
-- **Security log audit:** Run `python scripts/inspect_security_logs.py --since 12h` to filter container logs for rejected webhook attempts (missing/invalid secret, disallowed IPs, bad content types, etc.). Use `--container` if your Docker engine names the container differently.
+- **Security log audit:** Run `python scripts/inspect_security_logs.py --since 12h` to filter container logs for rejected webhook attempts (missing/invalid secret, disallowed IPs, bad content types, etc.). Use `--container` if your Docker engine names the container differently. Be careful tho, not tested yet!
 - **Docker healthcheck:** The compose file continuously probes the `/health` endpoint to ensure the service stays responsive; review `docker compose ps` for status.
 
 Once the container is running and the webhook is configured, the hybrid runtime keeps watching for Telegram updates—no cron job is required. Polling is only used during startup to drain any backlog before switching to the webhook stream.
