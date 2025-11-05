@@ -18,9 +18,9 @@ The project follows a modular, service-oriented approach. Each external API (Tel
 ```
 .
 ├── app/
-│   ├── __init__.py
-│   ├── main.py                 # FastAPI endpoint and main script
-│   ├── config.py               # Loads all settings from .env
+│   ├── main.py                 # Initializes logging and starts the hybrid runtime
+│   ├── bootstrap.py            # Orchestrates polling catch-up + webhook startup
+│   ├── config.py               # Loads and validates all env configuration
 │   ├── logging_config.py       # Configures application-wide logging
 │   ├── cache_model.py          # Caches the embedding model during Docker build
 │   ├── services/               # Modules for external APIs
@@ -29,25 +29,27 @@ The project follows a modular, service-oriented approach. Each external API (Tel
 │   │   ├── notion_service.py
 │   │   ├── llm_service.py
 │   │   └── vector_service.py   # Handles vector index creation and querying for RAG
-│   └── processing/
-│       └── workflow_processor.py # The main workflow orchestrator
+│   ├── processing/
+│   │   └── workflow_processor.py # The main workflow orchestrator
+│   └── webhook_api.py          # FastAPI app for webhook + health endpoints
 ├── prompts/
-│   └── main_prompt.txt         # The master prompt for the LLM
+│   ├── gemini_prompt.md
+│   └── thought_structuring_prompt.md
+├── scripts/
+│   ├── entrypoint.sh           # Container entrypoint that prepares state & launches the app
+│   └── inspect_security_logs.py # Helper to audit webhook-related logs
 ├── (.env)                      # Your secret API keys (to be created!)
 ├── .env.example                # Template for the .env file
-├── .cursorrules                # AI coding assistant rules
 ├── requirements.txt            # Python dependencies
-├── Dockerfile                  # Instructions for building the Docker image
-├── docker-compose.yml          # Service definition for Docker Compose
-├── entrypoint.sh               # Initialization script
-└── ai-agent-cron               # Crontab file defining time interval between executions
+├── Dockerfile                  # Build instructions for the application image
+└── docker-compose.yml          # Service definition for Docker Compose
 ```
 
 ## 🛠️ Setup
 
 ### 1. Prerequisites
 
-Docker and Docker Compose must be installed on your system. The application also requires several Python libraries for vector embeddings and search (langchain-huggingface, sentence-transformers, faiss-cpu, torch).
+Docker and Docker Compose must be installed on your system. The container image bundles every required Python dependency (langchain-huggingface, sentence-transformers, faiss-cpu, torch, etc.), so you do not need to install them locally.
 
 You will need API keys for the following services:
 
@@ -68,7 +70,20 @@ Create the `.env` file: Copy the template and fill in your API keys and the Noti
 ```bash
 cp .env.example .env
 ```
-Now, open the `.env` file and set your API keys, timezone, and gemini model.
+Now, open the `.env` file and set your credentials and runtime options:
+
+- **Core tokens:** `TELEGRAM_BOT_TOKEN`, `GLADIA_API_KEY`, `GOOGLE_API_KEY`, `NOTION_API_KEY`, `NOTION_DATABASE_ID`.
+- **Webhook:** `WEBHOOK_URL`, `WEBHOOK_SECRET_TOKEN` (must match the Cloudflare gateway), and optionally `WEBHOOK_HOST/PORT`.
+- **Network allowlist:** Replace the placeholder values in `TELEGRAM_ALLOWED_CIDRS` with the latest ranges from the [Telegram documentation](https://core.telegram.org/bots/webhooks#the-short-answer).
+- **Other tuning:** Adjust Gladia rate limits, RAG depth, timezone, or container UID/GID as needed.
+
+Make sure any reverse proxy or Cloudflare tunnel forwards traffic to the same origin port specified via `WEBHOOK_PORT`, so that external ingress matches the running FastAPI server (default `8000`).
+When operating behind the companion Cloudflare tunnel, set `WEBHOOK_SECRET_TOKEN` in `.env` to the same value as `TELEGRAM_SECRET` in the tunnel repository; both sides must share the exact secret or the gateway will return HTTP 403.
+You can generate a suitably long secret (256 hex characters) with:
+```bash
+openssl rand -hex 128
+```
+If you want the container to run as a specific host user or group, adjust `SERVICE_UID` and `SERVICE_GID` in `.env` (defaults: `1000`).
 
 Set up the Notion Database:
 
@@ -82,14 +97,24 @@ Set up the Notion Database:
 
 Build and start the Docker container in detached mode:
 ```bash
-docker-compose up --build -d
+docker compose up --build -d
 ```
-The application is now running. The FastAPI server is available on port 8000 if you wish to trigger the workflow manually.
+The application is now running. The FastAPI server exposes a readiness endpoint at `http://localhost:8000/health` and serves the OpenAPI docs at `/docs`. The webhook listener is automatically registered with Telegram when `WEBHOOK_ENABLED=true`.
+
+> ℹ️ Wenn du Änderungen an Python-Abhängigkeiten oder am Dockerfile vorgenommen hast (z. B. aktualisierte HuggingFace-Caching-Logik), rebuild das Image vor dem Start explizit:
+> ```bash
+> docker compose build --no-cache
+> docker compose up -d
+> ```
 
 ### Manual Trigger
 
-You can access the interactive API documentation at `http://localhost:8000/docs` and execute the `/run-workflow` endpoint manually.
+You can access the interactive API documentation at `http://localhost:8000/docs` (or update the port to match your `WEBHOOK_PORT`) and invoke the `/run-workflow` endpoint manually if you need to trigger processing without waiting for new Telegram messages.
 
-### Automated Execution (Cron Job)
+## 🔍 Operations & Observability
 
-The workflow will run once on startup and then every 10 minutes as defined in the `ai-agent-cron` file.
+- **Webhook health check:** `GET /health` returns `{"status": "ok"}` when the FastAPI server is ready.
+- **Security log audit:** Run `python scripts/inspect_security_logs.py --since 12h` to filter container logs for rejected webhook attempts (missing/invalid secret, disallowed IPs, bad content types, etc.). Use `--container` if your Docker engine names the container differently.
+- **Docker healthcheck:** The compose file continuously probes the `/health` endpoint to ensure the service stays responsive; review `docker compose ps` for status.
+
+Once the container is running and the webhook is configured, the hybrid runtime keeps watching for Telegram updates—no cron job is required. Polling is only used during startup to drain any backlog before switching to the webhook stream.
